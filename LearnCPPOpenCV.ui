@@ -66,6 +66,18 @@ QLabel {
        <layout class="QHBoxLayout" name="horizontalLayout_6">
         <item>
          <widget class="QLabel" name="lbOrigin">
+          <property name="minimumSize">
+           <size>
+            <width>480</width>
+            <height>480</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>480</width>
+            <height>480</height>
+           </size>
+          </property>
           <property name="text">
            <string>原始图像</string>
           </property>
@@ -76,6 +88,18 @@ QLabel {
         </item>
         <item>
          <widget class="QLabel" name="lbRes">
+          <property name="minimumSize">
+           <size>
+            <width>480</width>
+            <height>480</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>480</width>
+            <height>480</height>
+           </size>
+          </property>
           <property name="text">
            <string>检测结果</string>
           </property>
