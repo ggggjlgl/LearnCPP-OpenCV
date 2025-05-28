@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <atomic>
 #include <string>
+#include <sstream>
+#include <map>
 #include <QThread>
 #include<QSharedPointer>
 #include <QImage>
@@ -27,9 +29,11 @@ public:
         keepRun = false;
     }
 signals:
-    // 发送原始帧和检测结果帧
     void updateRes(QPixmap originPixmap, QPixmap resPixmap);
+    void updateProgress(int progress);
+    void updateRecords(QString origin, std::vector<std::map<QString, QString>> detected);
     void finished(std::string err);
+    
 public slots:
     void doWork() {
         while (keepRun) {
@@ -38,11 +42,14 @@ public slots:
                 if (frame.empty()) {
                     break;
                 }
-                
                 QPixmap originPixmap = cvMatToQPixmap(frame);
                 std::vector<Detection> output = m_inf.runInference(frame);
-                drawDetections(frame, output);
+                auto detected = drawDetections(frame, output);
                 emit updateRes(originPixmap, cvMatToQPixmap(frame));
+                emit updateProgress(m_frameIter->progress());
+                if (!detected.empty()) {
+                    emit updateRecords(m_frameIter->origin(), detected);
+                }
                 QCoreApplication::processEvents();
             }
             catch (const std::exception& e) {
@@ -56,23 +63,32 @@ private:
     QSharedPointer<OriginIteratorBase> m_frameIter;
     Inference m_inf;
     std::atomic<bool> keepRun;
-    void drawDetections(cv::Mat& frame, const std::vector<Detection>& output) {
+    std::vector<std::map<QString, QString>> drawDetections(cv::Mat& frame, const std::vector<Detection>& output) {
+        std::vector<std::map<QString, QString>> detected;
+
         for (const auto& detection : output) {
             cv::Rect box = detection.box;
             cv::Scalar color = detection.color;
 
             cv::rectangle(frame, box, color, 2);
-
-            std::string classString = detection.className + ' ' + std::to_string(detection.confidence).substr(0, 4);
+            std::string confidence = std::to_string(detection.confidence).substr(0, 4);
+            std::string classString = detection.className + ' ' + confidence;
             cv::Size textSize = cv::getTextSize(classString, cv::FONT_HERSHEY_DUPLEX, 1, 2, 0);
             cv::Rect textBox(box.x, box.y - 40, textSize.width + 10, textSize.height + 20);
 
             cv::rectangle(frame, textBox, color, cv::FILLED);
             cv::putText(frame, classString, cv::Point(box.x + 5, box.y - 10), cv::FONT_HERSHEY_DUPLEX, 1, cv::Scalar(0, 0, 0), 2, 0);
+            std::map<QString, QString> res{};
+            res["class"] = QString::fromStdString(detection.className);
+            std::stringstream area;
+            area << "xmin: " << box.x << ", ymin: " << box.y << ", xmax: " << box.x + box.width << ", ymax: " << box.y + box.height;
+            res["area"] = QString::fromStdString(area.str());
+            res["confidence"] = QString::fromStdString(confidence);
+            detected.push_back(res);
         }
+        return detected;
     }
     QPixmap cvMatToQPixmap(const cv::Mat& mat) {
-        // 确保图像是RGB格式
         cv::Mat rgbFrame;
         if (mat.channels() == 1) {
             cv::cvtColor(mat, rgbFrame, cv::COLOR_GRAY2RGB);
@@ -84,11 +100,9 @@ private:
             cv::cvtColor(mat, rgbFrame, cv::COLOR_BGR2RGB);
         }
 
-        // 创建QImage并转换为QPixmap
         QImage image(rgbFrame.data, rgbFrame.cols, rgbFrame.rows,
             rgbFrame.step, QImage::Format_RGB888);
 
-        // 需要复制数据，因为QImage不管理原始内存
         return QPixmap::fromImage(image.copy());
     }
 };
